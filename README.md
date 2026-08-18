@@ -30,21 +30,40 @@ Analyser des user tests manuellement (revisionner des heures de vidéo, repérer
 
 ## Stack technique
 
-*À définir.*
+| Composant | Choix | Pourquoi |
+|---|---|---|
+| Langage | Python | Écosystème mature pour l'audio/vidéo et les appels API |
+| Transcription | [`faster-whisper`](https://github.com/SYSTRAN/faster-whisper) | Local, gratuit, timestamps par mot (nécessaires pour les moments clés et les clips) |
+| Extraction/découpe vidéo | `ffmpeg` | Standard, local, gratuit |
+| Résumé / détection de moments clés | API Claude (`claude-sonnet-5`) | Raisonnement sur texte (le transcript), coût marginal car pas de vidéo envoyée |
+| Stockage | Filesystem + JSON (SQLite à l'étape cross-sessions) | Pas besoin de plus pour un prototype |
+
+Transcription 100% locale et gratuite ; seule l'étape de résumé/analyse passe par l'API Claude (clé perso, coût à l'usage sur du texte uniquement — quelques centimes par session).
 
 ## Installation / Usage
 
-*À compléter une fois la première version du code disponible.*
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env   # puis renseigner ANTHROPIC_API_KEY
+
+python -m ut_assistant chemin/vers/session.mp4
+```
+
+Sorties générées dans `output/<nom_de_la_vidéo>/` : `transcript.json` (avec timestamps), `transcript.txt`, `summary.md`.
+
+Options utiles : `--model-size` (taille du modèle Whisper local, défaut `small`), `--language` (défaut : auto-détection), `--claude-model`, `--output-dir`.
 
 ## Roadmap
 
-- [ ] Définir le stack technique (langage, framework, outils de traitement vidéo/audio)
+- [x] Définir le stack technique (langage, framework, outils de traitement vidéo/audio)
 - [ ] Définir le format d'input (formats vidéo supportés, taille max, etc.)
-- [ ] Premier prototype : transcription + résumé d'une session unique
+- [x] Premier prototype : transcription + résumé d'une session unique
 - [ ] Détection des moments clés (frustrations, insights, quotes)
 - [ ] Extraction de clips vidéo
 - [ ] Rapport cross-sessions
-- [ ] Interface / mode d'interaction (CLI, web, skill Claude, etc.)
+- [x] Interface / mode d'interaction : CLI pour le prototype
 
 ## Contribuer
 
