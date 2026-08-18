@@ -21,30 +21,38 @@ Analyser des user tests manuellement (revisionner des heures de vidéo, repérer
 
 ## Comment ça fonctionne (grandes lignes)
 
-> À affiner au fur et à mesure du développement.
-
-1. L'utilisateur uploade un ou plusieurs extraits vidéo de sessions de user test.
-2. L'agent analyse le contenu (audio/visuel) pour identifier les moments significatifs.
-3. Il génère une synthèse par session, puis un rapport consolidé si plusieurs sessions sont fournies.
-4. Les clips vidéo correspondant aux moments clés peuvent être extraits individuellement.
+1. L'utilisateur uploade un ou plusieurs extraits vidéo de sessions de user test via la CLI.
+2. `faster-whisper` transcrit l'audio en local, `pyannote.audio` effectue la diarisation (identification des locuteurs).
+3. La transcription est envoyée à l'API Claude pour générer le résumé de session, détecter les moments clés (frustrations, insights, quotes) et produire le rapport cross-sessions.
+4. `ffmpeg` extrait les clips vidéo correspondant aux moments clés identifiés.
 
 ## Stack technique
 
-*À définir.*
+- **`faster-whisper`** — transcription audio, en local
+- **`pyannote.audio`** — diarisation (identification des locuteurs), en local
+- **API Claude (Anthropic)** — génération du résumé, détection des moments clés, rapport cross-sessions
+- **`ffmpeg`** — extraction des clips vidéo
+- **Python** — langage principal
+
+> Note confidentialité : la transcription et la diarisation tournent 100% en local (gratuit, pas d'appel cloud). Le texte transcrit (pas la vidéo brute) est envoyé à l'API Claude pour l'analyse.
 
 ## Installation / Usage
 
 *À compléter une fois la première version du code disponible.*
 
+### Configuration
+
+Une clé API Anthropic est nécessaire, à fournir via une variable d'environnement (ex. `ANTHROPIC_API_KEY`).
+
 ## Roadmap
 
-- [ ] Définir le stack technique (langage, framework, outils de traitement vidéo/audio)
+- [x] Définir le stack technique
 - [ ] Définir le format d'input (formats vidéo supportés, taille max, etc.)
-- [ ] Premier prototype : transcription + résumé d'une session unique
-- [ ] Détection des moments clés (frustrations, insights, quotes)
-- [ ] Extraction de clips vidéo
-- [ ] Rapport cross-sessions
-- [ ] Interface / mode d'interaction (CLI, web, skill Claude, etc.)
+- [ ] (1) Prototype : transcription + résumé d'une session unique
+- [ ] (2) Détection des moments clés (frustrations, insights, quotes)
+- [ ] (3) Extraction de clips vidéo
+- [ ] (4) Rapport cross-sessions
+- [ ] Interface : CLI pour le prototype ; UI web ou skill Claude envisageables ensuite
 
 ## Contribuer
 
