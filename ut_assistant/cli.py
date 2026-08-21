@@ -10,18 +10,39 @@ import anthropic
 from dotenv import load_dotenv
 
 from ut_assistant.audio import extract_audio
+from ut_assistant.moments import detect_key_moments
 from ut_assistant.summarize import DEFAULT_MODEL, summarize_session
 from ut_assistant.transcribe import transcribe
+
+
+def _call_claude(step_label: str, fn, *args, **kwargs):
+    print(step_label)
+    try:
+        return fn(*args, **kwargs)
+    except (anthropic.AuthenticationError, TypeError) as e:
+        if isinstance(e, TypeError) and "authentication" not in str(e).lower():
+            raise
+        print(
+            "\nErreur : clé API Anthropic invalide ou absente. "
+            "Définis la variable d'environnement ANTHROPIC_API_KEY (ou un fichier .env, voir .env.example).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def _mmss(seconds: float) -> str:
+    minutes, secs = divmod(int(seconds), 60)
+    return f"{minutes:02d}:{secs:02d}"
 
 
 def run(video_path: Path, output_dir: Path, model_size: str, language: str | None, claude_model: str) -> None:
     session_dir = output_dir / video_path.stem
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[1/3] Extraction audio ({video_path.name})...")
+    print(f"[1/4] Extraction audio ({video_path.name})...")
     audio_path = extract_audio(video_path, session_dir / "audio.wav")
 
-    print(f"[2/3] Transcription locale (faster-whisper, modèle '{model_size}')...")
+    print(f"[2/4] Transcription locale (faster-whisper, modèle '{model_size}')...")
     transcript = transcribe(audio_path, model_size=model_size, language=language)
 
     transcript_json_path = session_dir / "transcript.json"
@@ -34,25 +55,30 @@ def run(video_path: Path, output_dir: Path, model_size: str, language: str | Non
     print(f"      -> {transcript_json_path}")
     print(f"      -> {transcript_txt_path}")
 
-    print(f"[3/3] Résumé (Claude, modèle '{claude_model}')...")
-    try:
-        summary = summarize_session(transcript.text, model=claude_model)
-    except (anthropic.AuthenticationError, TypeError) as e:
-        if isinstance(e, TypeError) and "authentication" not in str(e).lower():
-            raise
-        print(
-            "\nErreur : clé API Anthropic invalide ou absente. "
-            "Définis la variable d'environnement ANTHROPIC_API_KEY (ou un fichier .env, voir .env.example).",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
+    summary = _call_claude(
+        f"[3/4] Résumé (Claude, modèle '{claude_model}')...",
+        summarize_session, transcript.text, model=claude_model,
+    )
     summary_path = session_dir / "summary.md"
     summary_path.write_text(summary, encoding="utf-8")
     print(f"      -> {summary_path}")
 
+    key_moments = _call_claude(
+        f"[4/4] Détection des moments clés (Claude, modèle '{claude_model}')...",
+        detect_key_moments, transcript, model=claude_model,
+    )
+    moments_path = session_dir / "moments.json"
+    moments_path.write_text(key_moments.model_dump_json(indent=2), encoding="utf-8")
+    print(f"      -> {moments_path}")
+
     print("\n" + "=" * 60)
     print(summary)
+
+    print("\n" + "=" * 60)
+    print(f"Moments clés ({len(key_moments.moments)}) :\n")
+    for m in key_moments.moments:
+        print(f"[{_mmss(m.timestamp_start)} - {_mmss(m.timestamp_end)}] ({m.type}) {m.description}")
+        print(f'    « {m.citation} »\n')
 
 
 def main() -> None:

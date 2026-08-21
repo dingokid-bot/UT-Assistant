@@ -1,3 +1,4 @@
 faster-whisper
 anthropic
+pydantic
 python-dotenv

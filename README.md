@@ -51,7 +51,7 @@ cp .env.example .env   # puis renseigner ANTHROPIC_API_KEY
 python -m ut_assistant chemin/vers/session.mp4
 ```
 
-Sorties générées dans `output/<nom_de_la_vidéo>/` : `transcript.json` (avec timestamps), `transcript.txt`, `summary.md`.
+Sorties générées dans `output/<nom_de_la_vidéo>/` : `transcript.json` (avec timestamps), `transcript.txt`, `summary.md`, `moments.json` (moments clés horodatés : frustrations, insights, citations).
 
 Options utiles : `--model-size` (taille du modèle Whisper local, défaut `small`), `--language` (défaut : auto-détection), `--claude-model`, `--output-dir`.
 
@@ -60,7 +60,7 @@ Options utiles : `--model-size` (taille du modèle Whisper local, défaut `small
 - [x] Définir le stack technique (langage, framework, outils de traitement vidéo/audio)
 - [ ] Définir le format d'input (formats vidéo supportés, taille max, etc.)
 - [x] Premier prototype : transcription + résumé d'une session unique
-- [ ] Détection des moments clés (frustrations, insights, quotes)
+- [x] Détection des moments clés (frustrations, insights, quotes)
 - [ ] Extraction de clips vidéo
 - [ ] Rapport cross-sessions
 - [x] Interface / mode d'interaction : CLI pour le prototype
