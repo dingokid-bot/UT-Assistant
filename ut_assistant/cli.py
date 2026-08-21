@@ -10,6 +10,7 @@ import anthropic
 from dotenv import load_dotenv
 
 from ut_assistant.audio import extract_audio
+from ut_assistant.clips import DEFAULT_PADDING_SECONDS, extract_clips
 from ut_assistant.moments import detect_key_moments
 from ut_assistant.summarize import DEFAULT_MODEL, summarize_session
 from ut_assistant.transcribe import transcribe
@@ -35,14 +36,22 @@ def _mmss(seconds: float) -> str:
     return f"{minutes:02d}:{secs:02d}"
 
 
-def run(video_path: Path, output_dir: Path, model_size: str, language: str | None, claude_model: str) -> None:
+def run(
+    video_path: Path,
+    output_dir: Path,
+    model_size: str,
+    language: str | None,
+    claude_model: str,
+    clip_padding: float,
+    no_clips: bool,
+) -> None:
     session_dir = output_dir / video_path.stem
     session_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[1/4] Extraction audio ({video_path.name})...")
+    print(f"[1/5] Extraction audio ({video_path.name})...")
     audio_path = extract_audio(video_path, session_dir / "audio.wav")
 
-    print(f"[2/4] Transcription locale (faster-whisper, modèle '{model_size}')...")
+    print(f"[2/5] Transcription locale (faster-whisper, modèle '{model_size}')...")
     transcript = transcribe(audio_path, model_size=model_size, language=language)
 
     transcript_json_path = session_dir / "transcript.json"
@@ -56,7 +65,7 @@ def run(video_path: Path, output_dir: Path, model_size: str, language: str | Non
     print(f"      -> {transcript_txt_path}")
 
     summary = _call_claude(
-        f"[3/4] Résumé (Claude, modèle '{claude_model}')...",
+        f"[3/5] Résumé (Claude, modèle '{claude_model}')...",
         summarize_session, transcript.text, model=claude_model,
     )
     summary_path = session_dir / "summary.md"
@@ -64,12 +73,20 @@ def run(video_path: Path, output_dir: Path, model_size: str, language: str | Non
     print(f"      -> {summary_path}")
 
     key_moments = _call_claude(
-        f"[4/4] Détection des moments clés (Claude, modèle '{claude_model}')...",
+        f"[4/5] Détection des moments clés (Claude, modèle '{claude_model}')...",
         detect_key_moments, transcript, model=claude_model,
     )
     moments_path = session_dir / "moments.json"
     moments_path.write_text(key_moments.model_dump_json(indent=2), encoding="utf-8")
     print(f"      -> {moments_path}")
+
+    if no_clips:
+        print("[5/5] Extraction de clips vidéo... ignorée (--no-clips)")
+    else:
+        print(f"[5/5] Extraction de clips vidéo (marge {clip_padding}s)...")
+        clip_paths = extract_clips(video_path, key_moments, session_dir / "clips", padding=clip_padding)
+        for clip_path in clip_paths:
+            print(f"      -> {clip_path}")
 
     print("\n" + "=" * 60)
     print(summary)
@@ -95,13 +112,23 @@ def main() -> None:
     )
     parser.add_argument("--language", default=None, help="Code langue du transcript (ex: fr). Défaut: auto-détection")
     parser.add_argument("--claude-model", default=DEFAULT_MODEL, help=f"Modèle Claude pour le résumé (défaut: {DEFAULT_MODEL})")
+    parser.add_argument(
+        "--clip-padding",
+        type=float,
+        default=DEFAULT_PADDING_SECONDS,
+        help=f"Marge en secondes ajoutée avant/après chaque clip (défaut: {DEFAULT_PADDING_SECONDS})",
+    )
+    parser.add_argument("--no-clips", action="store_true", help="Ne pas extraire de clips vidéo")
     args = parser.parse_args()
 
     if not args.video.exists():
         print(f"Erreur : fichier introuvable : {args.video}", file=sys.stderr)
         sys.exit(1)
 
-    run(args.video, args.output_dir, args.model_size, args.language, args.claude_model)
+    run(
+        args.video, args.output_dir, args.model_size, args.language, args.claude_model,
+        args.clip_padding, args.no_clips,
+    )
 
 
 if __name__ == "__main__":
