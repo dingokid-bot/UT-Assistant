@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 
 from ut_assistant.audio import extract_audio
 from ut_assistant.clips import DEFAULT_PADDING_SECONDS, extract_clips
+from ut_assistant.cross_report import collect_sessions, generate_cross_report
 from ut_assistant.moments import detect_key_moments
 from ut_assistant.summarize import DEFAULT_MODEL, summarize_session
 from ut_assistant.transcribe import transcribe
@@ -98,37 +99,72 @@ def run(
         print(f'    « {m.citation} »\n')
 
 
+def run_cross_report(output_dir: Path, claude_model: str) -> None:
+    sessions = collect_sessions(output_dir)
+    if len(sessions) < 2:
+        print(
+            f"Erreur : il faut au moins 2 sessions déjà analysées dans '{output_dir}' pour générer un rapport "
+            f"cross-sessions (trouvé : {len(sessions)}). Lance d'abord 'analyze' sur plusieurs vidéos.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    report = _call_claude(
+        f"Génération du rapport cross-sessions ({len(sessions)} sessions, Claude modèle '{claude_model}')...",
+        generate_cross_report, sessions, model=claude_model,
+    )
+
+    report_path = output_dir / "cross_report.md"
+    report_path.write_text(report, encoding="utf-8")
+    print(f"      -> {report_path}")
+
+    print("\n" + "=" * 60)
+    print(report)
+
+
 def main() -> None:
     load_dotenv()
 
-    parser = argparse.ArgumentParser(description="Transcrit et résume une session de user test.")
-    parser.add_argument("video", type=Path, help="Chemin vers le fichier vidéo de la session")
-    parser.add_argument("--output-dir", type=Path, default=Path("output"), help="Dossier de sortie (défaut: output/)")
-    parser.add_argument(
+    parser = argparse.ArgumentParser(description="Analyse des sessions de user test.")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    analyze_parser = subparsers.add_parser("analyze", help="Transcrit et analyse une session (vidéo unique)")
+    analyze_parser.add_argument("video", type=Path, help="Chemin vers le fichier vidéo de la session")
+    analyze_parser.add_argument("--output-dir", type=Path, default=Path("output"), help="Dossier de sortie (défaut: output/)")
+    analyze_parser.add_argument(
         "--model-size",
         default="small",
         choices=["tiny", "base", "small", "medium", "large-v3"],
         help="Taille du modèle Whisper local (défaut: small)",
     )
-    parser.add_argument("--language", default=None, help="Code langue du transcript (ex: fr). Défaut: auto-détection")
-    parser.add_argument("--claude-model", default=DEFAULT_MODEL, help=f"Modèle Claude pour le résumé (défaut: {DEFAULT_MODEL})")
-    parser.add_argument(
+    analyze_parser.add_argument("--language", default=None, help="Code langue du transcript (ex: fr). Défaut: auto-détection")
+    analyze_parser.add_argument("--claude-model", default=DEFAULT_MODEL, help=f"Modèle Claude pour le résumé (défaut: {DEFAULT_MODEL})")
+    analyze_parser.add_argument(
         "--clip-padding",
         type=float,
         default=DEFAULT_PADDING_SECONDS,
         help=f"Marge en secondes ajoutée avant/après chaque clip (défaut: {DEFAULT_PADDING_SECONDS})",
     )
-    parser.add_argument("--no-clips", action="store_true", help="Ne pas extraire de clips vidéo")
+    analyze_parser.add_argument("--no-clips", action="store_true", help="Ne pas extraire de clips vidéo")
+
+    cross_parser = subparsers.add_parser(
+        "cross-report", help="Génère un rapport consolidé à partir des sessions déjà analysées"
+    )
+    cross_parser.add_argument("--output-dir", type=Path, default=Path("output"), help="Dossier contenant les sessions analysées (défaut: output/)")
+    cross_parser.add_argument("--claude-model", default=DEFAULT_MODEL, help=f"Modèle Claude pour le rapport (défaut: {DEFAULT_MODEL})")
+
     args = parser.parse_args()
 
-    if not args.video.exists():
-        print(f"Erreur : fichier introuvable : {args.video}", file=sys.stderr)
-        sys.exit(1)
-
-    run(
-        args.video, args.output_dir, args.model_size, args.language, args.claude_model,
-        args.clip_padding, args.no_clips,
-    )
+    if args.command == "analyze":
+        if not args.video.exists():
+            print(f"Erreur : fichier introuvable : {args.video}", file=sys.stderr)
+            sys.exit(1)
+        run(
+            args.video, args.output_dir, args.model_size, args.language, args.claude_model,
+            args.clip_padding, args.no_clips,
+        )
+    elif args.command == "cross-report":
+        run_cross_report(args.output_dir, args.claude_model)
 
 
 if __name__ == "__main__":
