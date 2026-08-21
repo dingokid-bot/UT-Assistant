@@ -49,11 +49,19 @@ pip install -r requirements.txt
 cp .env.example .env   # puis renseigner ANTHROPIC_API_KEY
 
 python -m ut_assistant analyze chemin/vers/session.mp4
+
+# Plusieurs vidéos d'un coup :
+python -m ut_assistant analyze video1.mp4 video2.mp4 video3.mp4
+
+# Ou tout un dossier :
+python -m ut_assistant analyze --dir chemin/vers/dossier
 ```
 
 Sorties générées dans `output/<nom_de_la_vidéo>/` : `transcript.json` (avec timestamps), `transcript.txt`, `summary.md`, `moments.json` (moments clés horodatés : frustrations, insights, citations), et un dossier `clips/` avec un extrait vidéo par moment clé.
 
-Options utiles de `analyze` : `--model-size` (taille du modèle Whisper local, défaut `small`), `--language` (défaut : auto-détection), `--claude-model`, `--output-dir`, `--clip-padding` (marge en secondes autour de chaque clip, défaut 2s), `--no-clips` (désactive la découpe vidéo).
+Options utiles de `analyze` : `--dir` (traiter tout un dossier de vidéos), `--model-size` (taille du modèle Whisper local, défaut `small`), `--language` (défaut : auto-détection), `--claude-model`, `--output-dir`, `--clip-padding` (marge en secondes autour de chaque clip, défaut 2s), `--no-clips` (désactive la découpe vidéo).
+
+En cas de plusieurs vidéos, chaque échec (fichier corrompu, etc.) est signalé mais n'interrompt pas le traitement des suivantes — sauf une erreur de clé API, qui arrête tout de suite puisqu'elle affecterait toutes les vidéos restantes.
 
 Une fois au moins deux sessions analysées avec `analyze`, génère un rapport consolidé qui fait ressortir les patterns communs :
 

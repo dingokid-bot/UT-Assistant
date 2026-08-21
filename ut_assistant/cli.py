@@ -99,6 +99,38 @@ def run(
         print(f'    « {m.citation} »\n')
 
 
+VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv", ".avi", ".webm")
+
+
+def run_batch(
+    video_paths: list[Path],
+    output_dir: Path,
+    model_size: str,
+    language: str | None,
+    claude_model: str,
+    clip_padding: float,
+    no_clips: bool,
+) -> None:
+    succeeded = []
+    failed = []
+
+    for i, video_path in enumerate(video_paths, start=1):
+        print(f"\n########## Vidéo {i}/{len(video_paths)} : {video_path.name} ##########\n")
+        try:
+            run(video_path, output_dir, model_size, language, claude_model, clip_padding, no_clips)
+            succeeded.append(video_path)
+        except Exception as e:
+            print(f"\nErreur sur '{video_path.name}', passage à la suivante : {e}", file=sys.stderr)
+            failed.append(video_path)
+
+    if len(video_paths) > 1:
+        print(f"\n{'=' * 60}\nBilan : {len(succeeded)}/{len(video_paths)} session(s) traitée(s) avec succès.")
+        if failed:
+            print("Échecs :")
+            for video_path in failed:
+                print(f"  - {video_path.name}")
+
+
 def run_cross_report(output_dir: Path, claude_model: str) -> None:
     sessions = collect_sessions(output_dir)
     if len(sessions) < 2:
@@ -128,8 +160,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Analyse des sessions de user test.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    analyze_parser = subparsers.add_parser("analyze", help="Transcrit et analyse une session (vidéo unique)")
-    analyze_parser.add_argument("video", type=Path, help="Chemin vers le fichier vidéo de la session")
+    analyze_parser = subparsers.add_parser("analyze", help="Transcrit et analyse une ou plusieurs sessions")
+    analyze_parser.add_argument(
+        "videos", type=Path, nargs="*",
+        help="Chemin(s) vers un ou plusieurs fichiers vidéo (omis si --dir est utilisé)",
+    )
+    analyze_parser.add_argument(
+        "--dir", type=Path, default=None,
+        help=f"Traiter tous les fichiers vidéo d'un dossier ({', '.join(VIDEO_EXTENSIONS)})",
+    )
     analyze_parser.add_argument("--output-dir", type=Path, default=Path("output"), help="Dossier de sortie (défaut: output/)")
     analyze_parser.add_argument(
         "--model-size",
@@ -156,11 +195,23 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "analyze":
-        if not args.video.exists():
-            print(f"Erreur : fichier introuvable : {args.video}", file=sys.stderr)
-            sys.exit(1)
-        run(
-            args.video, args.output_dir, args.model_size, args.language, args.claude_model,
+        if args.dir:
+            video_paths = sorted(p for p in args.dir.iterdir() if p.suffix.lower() in VIDEO_EXTENSIONS)
+            if not video_paths:
+                print(f"Erreur : aucune vidéo trouvée dans '{args.dir}'.", file=sys.stderr)
+                sys.exit(1)
+        elif args.videos:
+            video_paths = args.videos
+            missing = [p for p in video_paths if not p.exists()]
+            if missing:
+                for p in missing:
+                    print(f"Erreur : fichier introuvable : {p}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            parser.error("fournis un ou plusieurs fichiers vidéo, ou utilise --dir")
+
+        run_batch(
+            video_paths, args.output_dir, args.model_size, args.language, args.claude_model,
             args.clip_padding, args.no_clips,
         )
     elif args.command == "cross-report":
